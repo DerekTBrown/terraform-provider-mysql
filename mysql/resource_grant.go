@@ -654,7 +654,7 @@ func setDataFromGrant(grant MySQLGrant, d *schema.ResourceData) *schema.Resource
 		d.Set("tls_option", procedureGrant.TLSOption)
 
 		if _, ok := d.GetOk("database"); !ok {
-			d.Set("database", fmt.Sprintf("%s %s.%s", procedureGrant.ObjectT, procedureGrant.Database, procedureGrant.CallableName))
+			d.Set("database", fmt.Sprintf("%s `%s`.`%s`", procedureGrant.ObjectT, procedureGrant.Database, procedureGrant.CallableName))
 		}
 		if _, ok := d.GetOk("table"); !ok {
 			d.Set("table", "*")
