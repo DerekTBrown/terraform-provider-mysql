@@ -183,7 +183,7 @@ func (t *ProcedurePrivilegeGrant) GetPrivileges() []string {
 }
 
 func (t *ProcedurePrivilegeGrant) SQLGrantStatement() string {
-	stmtSql := fmt.Sprintf("GRANT %s ON %s %s.%s TO %s", strings.Join(t.Privileges, ", "), t.ObjectT, t.GetDatabase(), t.CallableName, t.UserOrRole.SQLString())
+	stmtSql := fmt.Sprintf("GRANT %s ON %s %s.`%s` TO %s", strings.Join(t.Privileges, ", "), t.ObjectT, t.GetDatabase(), t.CallableName, t.UserOrRole.SQLString())
 	if t.TLSOption != "" && strings.ToLower(t.TLSOption) != "none" {
 		stmtSql += fmt.Sprintf(" REQUIRE %s", t.TLSOption)
 	}
@@ -198,7 +198,7 @@ func (t *ProcedurePrivilegeGrant) SQLRevokeStatement() string {
 	if t.Grant {
 		privs = append(privs, "GRANT OPTION")
 	}
-	stmt := fmt.Sprintf("REVOKE %s ON %s %s.%s FROM %s", strings.Join(privs, ", "), t.ObjectT, t.GetDatabase(), t.CallableName, t.UserOrRole.SQLString())
+	stmt := fmt.Sprintf("REVOKE %s ON %s %s.`%s` FROM %s", strings.Join(privs, ", "), t.ObjectT, t.GetDatabase(), t.CallableName, t.UserOrRole.SQLString())
 	return stmt
 }
 
@@ -207,7 +207,7 @@ func (t *ProcedurePrivilegeGrant) SQLPartialRevokePrivilegesStatement(privileges
 	if t.Grant {
 		privs = append(privs, "GRANT OPTION")
 	}
-	stmt := fmt.Sprintf("REVOKE %s ON %s %s.%s FROM %s", strings.Join(privs, ", "), t.ObjectT, t.GetDatabase(), t.CallableName, t.UserOrRole.SQLString())
+	stmt := fmt.Sprintf("REVOKE %s ON %s %s.`%s` FROM %s", strings.Join(privs, ", "), t.ObjectT, t.GetDatabase(), t.CallableName, t.UserOrRole.SQLString())
 	return stmt
 }
 
@@ -650,10 +650,15 @@ func setDataFromGrant(grant MySQLGrant, d *schema.ResourceData) *schema.Resource
 		d.Set("tls_option", tableGrant.TLSOption)
 
 	} else if procedureGrant, ok := grant.(*ProcedurePrivilegeGrant); ok {
-		d.Set("database", fmt.Sprintf("%s %s.%s", procedureGrant.ObjectT, procedureGrant.Database, procedureGrant.CallableName))
-		d.Set("table", "*")
 		d.Set("grant", grant.GrantOption())
 		d.Set("tls_option", procedureGrant.TLSOption)
+
+		if _, ok := d.GetOk("database"); !ok {
+			d.Set("database", fmt.Sprintf("%s %s.%s", procedureGrant.ObjectT, procedureGrant.Database, procedureGrant.CallableName))
+		}
+		if _, ok := d.GetOk("table"); !ok {
+			d.Set("table", "*")
+		}
 
 	} else if roleGrant, ok := grant.(*RoleGrant); ok {
 		d.Set("grant", grant.GrantOption())

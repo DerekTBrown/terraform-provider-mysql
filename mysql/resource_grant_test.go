@@ -830,20 +830,62 @@ func TestAccGrantOnProcedure(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccGrantConfigProcedure(procedureName, dbName, hostName),
+				Config: testAccGrantConfigProcedureWithTable(procedureName, dbName, hostName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckProcedureGrant("mysql_grant.test_procedure", userName, hostName, procedureName, true),
 					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "user", userName),
 					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "host", hostName),
+					// Note: The database and table name do not change. This is to preserve legacy functionality.
+					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "database", fmt.Sprintf("PROCEDURE %s", dbName)),
+					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "table", procedureName),
+				),
+			},
+			{
+				// Remove the grant
+				Config: testAccGrantConfigNoGrant(dbName),
+			},
+			{
+				Config: testAccGrantConfigProcedureWithDatabase(procedureName, dbName, hostName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckProcedureGrant("mysql_grant.test_procedure", userName, hostName, procedureName, true),
+					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "user", userName),
+					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "host", hostName),
+					// Note: The database and table name do not change. This is to preserve legacy functionality.
 					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "database", fmt.Sprintf("PROCEDURE %s.%s", dbName, procedureName)),
-					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "table", "*"), // Ensure table attribute is empty for procedures
+					resource.TestCheckResourceAttr("mysql_grant.test_procedure", "table", "*"),
 				),
 			},
 		},
 	})
 }
 
-func testAccGrantConfigProcedure(procedureName string, dbName string, hostName string) string {
+func testAccGrantConfigProcedureWithTable(procedureName string, dbName string, hostName string) string {
+	return fmt.Sprintf(`
+resource "mysql_database" "test" {
+  name = "%s"
+}
+
+resource "mysql_user" "test" {
+  user     = "jdoe-%s"
+  host     = "example.com"
+}
+
+resource "mysql_user" "test_global" {
+  user     = "jdoe-%s"
+  host     = "%%"
+}
+
+resource "mysql_grant" "test_procedure" {
+    user       = "jdoe-%s"
+    host       = "%s"
+    privileges = ["EXECUTE"]
+    database   = "PROCEDURE %s"
+	table 	   = "%s"
+}
+`, dbName, dbName, dbName, dbName, hostName, dbName, procedureName)
+}
+
+func testAccGrantConfigProcedureWithDatabase(procedureName string, dbName string, hostName string) string {
 	return fmt.Sprintf(`
 resource "mysql_database" "test" {
   name = "%s"
