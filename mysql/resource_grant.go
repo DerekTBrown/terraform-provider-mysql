@@ -645,23 +645,18 @@ func ImportGrant(ctx context.Context, d *schema.ResourceData, meta interface{}) 
 }
 
 // setDataFromGrant copies the values from MySQLGrant to the schema.ResourceData
+// This function is used when importing a new Grant, or when syncing remote state to Terraform state
+// It is responsible for pulling any non-identifying properties (e.g. grant, tls_option) into the Terraform state
+// Identifying properties (database, table) are already set either as part of the import id or required properties
+// of the Terraform resource.
 func setDataFromGrant(grant MySQLGrant, d *schema.ResourceData) *schema.ResourceData {
-
 	if tableGrant, ok := grant.(*TablePrivilegeGrant); ok {
-		d.Set("database", tableGrant.Database)
 		d.Set("grant", grant.GrantOption())
 		d.Set("tls_option", tableGrant.TLSOption)
 
 	} else if procedureGrant, ok := grant.(*ProcedurePrivilegeGrant); ok {
 		d.Set("grant", grant.GrantOption())
 		d.Set("tls_option", procedureGrant.TLSOption)
-
-		if _, ok := d.GetOk("database"); !ok {
-			d.Set("database", fmt.Sprintf("%s `%s`.`%s`", procedureGrant.ObjectT, procedureGrant.Database, procedureGrant.CallableName))
-		}
-		if _, ok := d.GetOk("table"); !ok {
-			d.Set("table", "*")
-		}
 
 	} else if roleGrant, ok := grant.(*RoleGrant); ok {
 		d.Set("grant", grant.GrantOption())
