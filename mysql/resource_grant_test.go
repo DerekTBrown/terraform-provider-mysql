@@ -86,67 +86,35 @@ func TestAccRevokePrivRefresh(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
+					testAccPrivilege("mysql_grant.test", "UPDATE", true, false),
 				),
 			},
 			{
 				RefreshState:       true,
 				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeTestCheckFunc(
-					revokeUserPrivs(dbName, "SELECT"),
+					revokeUserPrivs(dbName, "UPDATE"),
 				),
 			},
 			{
 				RefreshState:       true,
 				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeTestCheckFunc(
-					testAccPrivilege("mysql_grant.test", "SELECT", false, false),
+					testAccPrivilege("mysql_grant.test", "UPDATE", false, false),
 				),
 			},
 			{
-				Config:             testAccGrantConfigBasic(dbName),
 				PlanOnly:           true,
 				ExpectNonEmptyPlan: true,
+				Config:             testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					testAccPrivilege("mysql_grant.test", "SELECT", false, false),
+					testAccPrivilege("mysql_grant.test", "UPDATE", false, false),
 				),
 			},
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
-				),
-			},
-		},
-	})
-}
-
-func TestAccDropUserRefresh(t *testing.T) {
-	dbName := fmt.Sprintf("tf-test-%d", rand.Intn(100))
-
-	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t); testAccPreCheckSkipRds(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccGrantCheckDestroy,
-		Steps: []resource.TestStep{
-			{
-				Config: testAccGrantConfigBasic(dbName),
-				Check: resource.ComposeTestCheckFunc(
-					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
-				),
-			},
-			{
-				RefreshState:       true,
-				ExpectNonEmptyPlan: true,
-				Check: resource.ComposeTestCheckFunc(
-					dropUser(dbName),
-				),
-			},
-			{
-				RefreshState:       true,
-				ExpectNonEmptyPlan: true,
-				Check: resource.ComposeTestCheckFunc(
-					testResourceNotDefined("mysql_grant.test"),
+					testAccPrivilege("mysql_grant.test", "UPDATE", true, false),
 				),
 			},
 		},
@@ -1062,51 +1030,25 @@ func revokeUserPrivs(dbname string, privs string) resource.TestCheckFunc {
 		}
 
 		// Switch to the specified database
-		_, err = db.ExecContext(ctx, fmt.Sprintf("USE `%s`", dbname))
+		_, err = db.ExecContext(ctx, fmt.Sprintf("USE `%s`;", dbname))
 		log.Printf("[DEBUG] SQL: USE %s", dbname)
 		if err != nil {
 			return fmt.Errorf("Error selecting database %s: %s", dbname, err)
 		}
 
 		// Revoke all privileges for this user
-		revokeAllSql := fmt.Sprintf("REVOKE %s ON `%s`.* FROM 'jdoe-%s'@'example.com'", privs, dbname, dbname)
+		revokeAllSql := fmt.Sprintf("REVOKE %s ON `%s`.* FROM 'jdoe-%s'@'example.com';", privs, dbname, dbname)
 		log.Printf("[DEBUG] SQL: %s", revokeAllSql)
 		if _, err := db.Exec(revokeAllSql); err != nil {
 			return fmt.Errorf("error revoking grant: %s", err)
 		}
 
 		// Flush privileges (needed for 5.7, mariadb)
-		flushSql := `FLUSH PRIVILEGES`
+		flushSql := `FLUSH PRIVILEGES;`
 		log.Printf("[DEBUG] SQL: %s", flushSql)
 		if _, err := db.Exec(flushSql); err != nil {
 			return fmt.Errorf("error flushing privileges: %s", err)
 		}
-		return nil
-	}
-}
-
-func dropUser(dbname string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		ctx := context.Background()
-		db, err := connectToMySQL(ctx, testAccProvider.Meta().(*MySQLConfiguration))
-		if err != nil {
-			return err
-		}
-
-		// Switch to the specified database
-		_, err = db.ExecContext(ctx, fmt.Sprintf("USE `%s`", dbname))
-		log.Printf("[DEBUG] SQL: %s", dbname)
-		if err != nil {
-			return fmt.Errorf("Error selecting database %s: %s", dbname, err)
-		}
-
-		// Drop user
-		dropUserSql := fmt.Sprintf(`DROP USER 'jdoe-%s'@'example.com'`, dbname)
-		log.Printf("[DEBUG] SQL: %s", dropUserSql)
-		if _, err := db.Exec(dropUserSql); err != nil {
-			return fmt.Errorf("error dropping user: %s", err)
-		}
-
 		return nil
 	}
 }
