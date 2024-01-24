@@ -75,6 +75,52 @@ func TestAccGrantWithGrantOption(t *testing.T) {
 	})
 }
 
+func TestAccGrantReload(t *testing.T) {
+	dbName := fmt.Sprintf("tf-test-%d", rand.Intn(100))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t); testAccPreCheckSkipRds(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccGrantCheckDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccGrantConfigBasic(dbName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
+				),
+			},
+			{
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeTestCheckFunc(
+					revokeAllUserPrivs(dbName),
+				),
+			},
+			{
+				RefreshState:       true,
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeTestCheckFunc(
+					testAccPrivilege("mysql_grant.test", "SELECT", false, false),
+				),
+			},
+			{
+				Config:             testAccGrantConfigBasic(dbName),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeTestCheckFunc(
+					testAccPrivilege("mysql_grant.test", "SELECT", false, false),
+				),
+			},
+			{
+				Config: testAccGrantConfigBasic(dbName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
+				),
+			},
+		},
+	})
+}
+
 func TestAccBroken(t *testing.T) {
 	dbName := fmt.Sprintf("tf-test-%d", rand.Intn(100))
 	resource.Test(t, resource.TestCase{
@@ -354,6 +400,9 @@ func testAccPrivilege(rn string, privilege string, expectExists bool, expectGran
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[rn]
 		if !ok {
+			if !expectExists {
+				return nil
+			}
 			return fmt.Errorf("resource not found: %s", rn)
 		}
 
@@ -957,6 +1006,25 @@ func testAccCheckProcedureGrant(resourceName, userName, hostName, procedureName 
 			return fmt.Errorf("Grant for procedure %s does not match expected state: %v", procedureName, expected)
 		}
 
+		return nil
+	}
+}
+
+func revokeAllUserPrivs(dbname string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx := context.Background()
+		db, err := connectToMySQL(ctx, testAccProvider.Meta().(*MySQLConfiguration))
+		if err != nil {
+			return err
+		}
+
+		// Revoke all privileges for this user
+		createProcedureSQL := fmt.Sprintf(`
+			REVOKE ALL PRIVILEGES ON *.* FROM 'jdoe-%s'@'example.com';
+			`, dbname)
+		if _, err := db.Exec(createProcedureSQL); err != nil {
+			return fmt.Errorf("error reading grant: %s", err)
+		}
 		return nil
 	}
 }
