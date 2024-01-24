@@ -100,7 +100,7 @@ func TestAccGrantReload(t *testing.T) {
 				RefreshState:       true,
 				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeTestCheckFunc(
-					testAccPrivilege("mysql_grant.test", "SELECT", false, false),
+					testResourceNotDefined("mysql_grant.test"),
 				),
 			},
 			{
@@ -395,14 +395,21 @@ func prepareTable(dbname string) resource.TestCheckFunc {
 	}
 }
 
+func testResourceNotDefined(rn string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		_, ok := s.RootModule().Resources[rn]
+		if ok {
+			return fmt.Errorf("resource found, but not expected: %s", rn)
+		}
+		return nil
+	}
+}
+
 // Test privilege - one can condition it exists or that it doesn't exist.
 func testAccPrivilege(rn string, privilege string, expectExists bool, expectGrant bool) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[rn]
 		if !ok {
-			if !expectExists {
-				return nil
-			}
 			return fmt.Errorf("resource not found: %s", rn)
 		}
 
@@ -819,6 +826,7 @@ func prepareProcedure(dbname string, procedureName string) resource.TestCheckFun
 
 		// Switch to the specified database
 		_, err = db.ExecContext(ctx, fmt.Sprintf("USE `%s`", dbname))
+		log.Printf("[DEBUG] SQL: %s", dbname)
 		if err != nil {
 			return fmt.Errorf("Error selecting database %s: %s", dbname, err)
 		}
@@ -830,6 +838,7 @@ SELECT COUNT(*)
 FROM information_schema.ROUTINES
 WHERE ROUTINE_SCHEMA = ? AND ROUTINE_NAME = ? AND ROUTINE_TYPE = 'PROCEDURE'
 `)
+		log.Printf("[DEBUG] SQL: %s", checkExistenceSQL)
 		err = db.QueryRowContext(ctx, checkExistenceSQL, dbname, procedureName).Scan(&exists)
 		if err != nil {
 			return fmt.Errorf("Error checking existence of procedure %s: %s", procedureName, err)
@@ -846,6 +855,7 @@ WHERE ROUTINE_SCHEMA = ? AND ROUTINE_NAME = ? AND ROUTINE_TYPE = 'PROCEDURE'
 				SELECT 1;
 			END
 			`, procedureName)
+		log.Printf("[DEBUG] SQL: %s", createProcedureSQL)
 		if _, err := db.Exec(createProcedureSQL); err != nil {
 			return fmt.Errorf("error reading grant: %s", err)
 		}
@@ -970,6 +980,7 @@ func testAccCheckProcedureGrant(resourceName, userName, hostName, procedureName 
 
 		// Query to show grants for the specific user
 		query := fmt.Sprintf("SHOW GRANTS FOR '%s'@'%s'", userName, hostName)
+		log.Printf("[DEBUG] SQL: %s", query)
 
 		// Use db.Query to execute the query
 		rows, err := db.Query(query)
@@ -1019,10 +1030,12 @@ func revokeAllUserPrivs(dbname string) resource.TestCheckFunc {
 		}
 
 		// Revoke all privileges for this user
-		createProcedureSQL := fmt.Sprintf(`
+		revokeAllSql := fmt.Sprintf(`
 			REVOKE ALL PRIVILEGES ON *.* FROM 'jdoe-%s'@'example.com';
+			FLUSH PRIVILEGES;
 			`, dbname)
-		if _, err := db.Exec(createProcedureSQL); err != nil {
+		log.Printf("[DEBUG] SQL: %s", revokeAllSql)
+		if _, err := db.Exec(revokeAllSql); err != nil {
 			return fmt.Errorf("error reading grant: %s", err)
 		}
 		return nil
