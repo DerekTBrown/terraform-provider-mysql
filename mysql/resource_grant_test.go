@@ -23,7 +23,6 @@ func TestAccGrant(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -34,7 +33,6 @@ func TestAccGrant(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -55,7 +53,6 @@ func TestAccGrantWithGrantOption(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "grant", "false"),
 				),
@@ -63,7 +60,6 @@ func TestAccGrantWithGrantOption(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasicWithGrant(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, true),
 					resource.TestCheckResourceAttr("mysql_grant.test", "grant", "true"),
 				),
@@ -71,7 +67,6 @@ func TestAccGrantWithGrantOption(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "grant", "false"),
 				),
@@ -91,7 +86,6 @@ func TestAccRevokePrivRefresh(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "UPDATE", true, false),
 				),
 			},
@@ -99,7 +93,6 @@ func TestAccRevokePrivRefresh(t *testing.T) {
 				RefreshState:       true,
 				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					revokeUserPrivs(dbName, "UPDATE"),
 				),
 			},
@@ -107,7 +100,6 @@ func TestAccRevokePrivRefresh(t *testing.T) {
 				RefreshState:       true,
 				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "UPDATE", false, false),
 				),
 			},
@@ -116,14 +108,12 @@ func TestAccRevokePrivRefresh(t *testing.T) {
 				ExpectNonEmptyPlan: true,
 				Config:             testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "UPDATE", false, false),
 				),
 			},
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "UPDATE", true, false),
 				),
 			},
@@ -141,7 +131,6 @@ func TestAccBroken(t *testing.T) {
 			{
 				Config: testAccGrantConfigBasic(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -153,7 +142,6 @@ func TestAccBroken(t *testing.T) {
 				Config:      testAccGrantConfigBroken(dbName),
 				ExpectError: regexp.MustCompile("already has"),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -178,7 +166,6 @@ func TestAccDifferentHosts(t *testing.T) {
 			{
 				Config: testAccGrantConfigExtraHost(dbName, false),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test_all", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test_all", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test_all", "host", "%"),
@@ -188,7 +175,6 @@ func TestAccDifferentHosts(t *testing.T) {
 			{
 				Config: testAccGrantConfigExtraHost(dbName, true),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "10.1.2.3"),
@@ -219,7 +205,6 @@ func TestAccGrantComplex(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithPrivs(dbName, `"SELECT (c1, c2)"`),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SELECT (c1,c2)", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -230,7 +215,6 @@ func TestAccGrantComplex(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithPrivs(dbName, `"DROP", "SELECT (c1)", "INSERT(c3, c4)", "REFERENCES(c5)"`),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "INSERT (c3,c4)", true, false),
 					testAccPrivilege("mysql_grant.test", "SELECT (c1)", true, false),
 					testAccPrivilege("mysql_grant.test", "SELECT (c1,c2)", false, false),
@@ -244,7 +228,6 @@ func TestAccGrantComplex(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithPrivs(dbName, `"DROP", "SELECT (c1)", "INSERT(c4, c3, c2)"`),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "REFERENCES (c5)", false, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -255,7 +238,6 @@ func TestAccGrantComplex(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithPrivs(dbName, `"ALL PRIVILEGES"`),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "ALL", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -266,7 +248,6 @@ func TestAccGrantComplex(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithPrivs(dbName, `"ALL"`),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "ALL", true, false),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
@@ -277,7 +258,6 @@ func TestAccGrantComplex(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithPrivs(dbName, `"DROP", "SELECT (c1, c2)", "INSERT(c5)", "REFERENCES(c1)"`),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "ALL", false, false),
 					testAccPrivilege("mysql_grant.test", "DROP", true, false),
 					testAccPrivilege("mysql_grant.test", "SELECT(c1,c2)", true, false),
@@ -315,7 +295,6 @@ func TestAccGrantComplexMySQL8(t *testing.T) {
 			{
 				Config: testAccGrantConfigWithDynamicMySQL8(dbName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					testAccPrivilege("mysql_grant.test", "SHOW DATABASES", true, false),
 					testAccPrivilege("mysql_grant.test", "CONNECTION_ADMIN", true, false),
 					testAccPrivilege("mysql_grant.test", "SELECT", true, false),
@@ -340,14 +319,12 @@ func TestAccGrant_role(t *testing.T) {
 			{
 				Config: testAccGrantConfigRole(dbName, roleName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					resource.TestCheckResourceAttr("mysql_grant.test", "role", roleName),
 				),
 			},
 			{
 				Config: testAccGrantConfigRoleWithGrantOption(dbName, roleName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					resource.TestCheckResourceAttr("mysql_grant.test", "role", roleName),
 					resource.TestCheckResourceAttr("mysql_grant.test", "grant", "true"),
 				),
@@ -355,7 +332,6 @@ func TestAccGrant_role(t *testing.T) {
 			{
 				Config: testAccGrantConfigRole(dbName, roleName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					resource.TestCheckResourceAttr("mysql_grant.test", "role", roleName),
 				),
 			},
@@ -378,7 +354,6 @@ func TestAccGrant_roleToUser(t *testing.T) {
 			{
 				Config: testAccGrantConfigRoleToUser(dbName, roleName),
 				Check: resource.ComposeTestCheckFunc(
-					flushPrivileges(),
 					resource.TestCheckResourceAttr("mysql_grant.test", "user", fmt.Sprintf("jdoe-%s", dbName)),
 					resource.TestCheckResourceAttr("mysql_grant.test", "host", "example.com"),
 					resource.TestCheckResourceAttr("mysql_grant.test", "roles.#", "1"),
@@ -1059,24 +1034,6 @@ func revokeUserPrivs(dbname string, privs string) resource.TestCheckFunc {
 		log.Printf("[DEBUG] SQL: %s", revokeAllSql)
 		if _, err := db.Exec(revokeAllSql); err != nil {
 			return fmt.Errorf("error revoking grant: %s", err)
-		}
-		return nil
-	}
-}
-
-func flushPrivileges() resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		ctx := context.Background()
-		db, err := connectToMySQL(ctx, testAccProvider.Meta().(*MySQLConfiguration))
-		if err != nil {
-			return err
-		}
-
-		// Flush privileges (needed for 5.7, mariadb)
-		flushSql := `FLUSH PRIVILEGES;`
-		log.Printf("[DEBUG] SQL: %s", flushSql)
-		if _, err := db.Exec(flushSql); err != nil {
-			return fmt.Errorf("error flushing privileges: %s", err)
 		}
 		return nil
 	}
