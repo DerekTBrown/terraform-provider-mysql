@@ -1030,13 +1030,17 @@ func revokeAllUserPrivs(dbname string) resource.TestCheckFunc {
 		}
 
 		// Revoke all privileges for this user
-		revokeAllSql := fmt.Sprintf(`
-			REVOKE ALL PRIVILEGES ON *.* FROM 'jdoe-%s'@'example.com';
-			FLUSH PRIVILEGES;
-			`, dbname)
+		revokeAllSql := fmt.Sprintf(`REVOKE ALL PRIVILEGES ON *.* FROM 'jdoe-%s'@'example.com'`, dbname)
 		log.Printf("[DEBUG] SQL: %s", revokeAllSql)
 		if _, err := db.Exec(revokeAllSql); err != nil {
-			return fmt.Errorf("error reading grant: %s", err)
+			return fmt.Errorf("error revoking grant: %s", err)
+		}
+
+		// Revoke all privileges for this user
+		flushSql := `FLUSH PRIVILEGES`
+		log.Printf("[DEBUG] SQL: %s", flushSql)
+		if _, err := db.Exec(flushSql); err != nil {
+			return fmt.Errorf("error flusing privileges: %s", err)
 		}
 		return nil
 	}
