@@ -55,6 +55,31 @@ type MySQLGrantWithRoles interface {
 	AppendRoles([]string)
 }
 
+func grantsConflict(grantA MySQLGrant, grantB MySQLGrant) bool {
+	if reflect.TypeOf(grantA) != reflect.TypeOf(grantB) {
+		return false
+	}
+	grantAWithDatabase, aOk := grantA.(MySQLGrantWithDatabase)
+	grantBWithDatabase, bOk := grantB.(MySQLGrantWithDatabase)
+	if aOk != bOk {
+		return false
+	}
+	if grantAWithDatabase.GetDatabase() != grantBWithDatabase.GetDatabase() {
+		return false
+	}
+
+	grantAWithTable, aOk := grantA.(MySQLGrantWithTable)
+	grantBWithTable, bOk := grantB.(MySQLGrantWithTable)
+	if aOk != bOk {
+		return false
+	}
+	if grantAWithTable.GetTable() != grantBWithTable.GetTable() {
+		return false
+	}
+
+	return true
+}
+
 type PrivilegesPartiallyRevocable interface {
 	SQLPartialRevokePrivilegesStatement(privilegesToRevoke []string) string
 }
@@ -625,41 +650,33 @@ func ImportGrant(ctx context.Context, d *schema.ResourceData, meta interface{}) 
 	database := userHostDatabaseTable[2]
 	table := userHostDatabaseTable[3]
 	grantOption := len(userHostDatabaseTable) == 5
-
 	userOrRole := UserOrRole{
 		Name: user,
 		Host: host,
 	}
 
+	desiredGrant := &TablePrivilegeGrant{
+		Database:   database,
+		Table:      table,
+		Grant:      grantOption,
+		UserOrRole: userOrRole,
+	}
+
 	db, err := getDatabaseFromMeta(ctx, meta)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Got error while getting database from meta: %w", err)
 	}
 
 	grants, err := showUserGrants(ctx, db, userOrRole)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to showUserGrants in import: %w", err)
 	}
-	for _, grant := range grants {
-		// Grant options must match
-		if grant.GrantOption() != grantOption {
-			continue
+	for _, foundGrant := range grants {
+		if grantsConflict(desiredGrant, foundGrant) {
+			res := resourceGrant().Data(nil)
+			setDataFromGrant(foundGrant, res)
+			return []*schema.ResourceData{res}, nil
 		}
-
-		// If we have a database grant, we need to match the database name
-		if dbGrant, ok := grant.(MySQLGrantWithDatabase); (!ok && database != "") || (ok && dbGrant.GetDatabase() != database) {
-			continue
-		}
-
-		// If we have a table grant, we need to match the table name
-		if tableGrant, ok := grant.(MySQLGrantWithTable); (!ok && table != "") || (ok && tableGrant.GetTable() != table) {
-			continue
-		}
-
-		// We have a match!
-		res := resourceGrant().Data(nil)
-		setDataFromGrant(grant, res)
-		return []*schema.ResourceData{res}, nil
 	}
 
 	// No match found
@@ -717,6 +734,12 @@ func setDataFromGrant(grant MySQLGrant, d *schema.ResourceData) *schema.Resource
 }
 
 func combineGrants(grantA MySQLGrant, grantB MySQLGrant) (MySQLGrant, error) {
+	// Check if the grants cover the same user, table, database
+	// If not, throw an error because they are unmergeable
+	if !grantsConflict(grantA, grantB) {
+		return nil, fmt.Errorf("Unable to combine MySQLGrant %s with %s because they don't cover the same table/database/user", grantA, grantB)
+	}
+
 	// We can combine grants with privileges
 	grantAWithPrivileges, aOk := grantA.(MySQLGrantWithPrivileges)
 	grantBWithPrivileges, bOk := grantB.(MySQLGrantWithPrivileges)
@@ -743,21 +766,11 @@ func getMatchingGrant(ctx context.Context, db *sql.DB, desiredGrant MySQLGrant) 
 		return nil, fmt.Errorf("showGrant - getting all grants failed: %w", err)
 	}
 	for _, dbGrant := range allGrants {
-		if desiredGrant.GrantOption() != dbGrant.GrantOption() {
+
+		// Check if the grants cover the same user, table, database
+		// If not, continue
+		if !grantsConflict(desiredGrant, dbGrant) {
 			continue
-		}
-		if reflect.TypeOf(desiredGrant) != reflect.TypeOf(dbGrant) {
-			continue
-		}
-		if grantWithDatabase, ok := desiredGrant.(MySQLGrantWithDatabase); ok {
-			if grantWithDatabase.GetDatabase() != dbGrant.(MySQLGrantWithDatabase).GetDatabase() {
-				continue
-			}
-		}
-		if grantWithTable, ok := desiredGrant.(MySQLGrantWithTable); ok {
-			if grantWithTable.GetTable() != dbGrant.(MySQLGrantWithTable).GetTable() {
-				continue
-			}
 		}
 
 		// For some reason, MySQL separates privileges into multiple lines
@@ -765,7 +778,7 @@ func getMatchingGrant(ctx context.Context, db *sql.DB, desiredGrant MySQLGrant) 
 		if result != nil {
 			result, err = combineGrants(result, dbGrant)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("Failed to combine grants in getMatchingGrant: %w", err)
 			}
 		} else {
 			result = dbGrant
@@ -842,12 +855,12 @@ func parseGrantFromRow(grantStr string) (MySQLGrant, error) {
 
 		userOrRole, err := parseUserOrRoleFromRow(procedureMatches[4])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to parseUserOrRole for procedure grant: %w", err)
 		}
 
 		database, callable, err := parseDatabaseQualifiedObject(procedureMatches[3])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to parseDatabaseQualifiedObject for procedure grant: %w", err)
 		}
 
 		grant := &ProcedurePrivilegeGrant{
@@ -873,12 +886,12 @@ func parseGrantFromRow(grantStr string) (MySQLGrant, error) {
 
 		userOrRole, err := parseUserOrRoleFromRow(tableMatches[3])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to parseUserOrRole for table grant: %w", err)
 		}
 
 		database, table, err := parseDatabaseQualifiedObject(tableMatches[2])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to parseDatabaseQualifiedObject for table grant: %w", err)
 		}
 
 		grant := &TablePrivilegeGrant{
@@ -901,7 +914,7 @@ func parseGrantFromRow(grantStr string) (MySQLGrant, error) {
 
 		userOrRole, err := parseUserOrRoleFromRow(roleMatches[2])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to parseUserOrRole for role grant: %w", err)
 		}
 
 		grant := &RoleGrant{
@@ -944,7 +957,7 @@ func showUserGrants(ctx context.Context, db *sql.DB, userOrRole UserOrRole) ([]M
 
 		parsedGrant, err := parseGrantFromRow(rawGrant)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Failed to parseGrantFromRow: %w", err)
 		}
 		if parsedGrant == nil {
 			continue
