@@ -64,8 +64,10 @@ func grantsConflict(grantA MySQLGrant, grantB MySQLGrant) bool {
 	if aOk != bOk {
 		return false
 	}
-	if grantAWithDatabase.GetDatabase() != grantBWithDatabase.GetDatabase() {
-		return false
+	if aOk && bOk {
+		if grantAWithDatabase.GetDatabase() != grantBWithDatabase.GetDatabase() {
+			return false
+		}
 	}
 
 	grantAWithTable, aOk := grantA.(MySQLGrantWithTable)
@@ -73,8 +75,10 @@ func grantsConflict(grantA MySQLGrant, grantB MySQLGrant) bool {
 	if aOk != bOk {
 		return false
 	}
-	if grantAWithTable.GetTable() != grantBWithTable.GetTable() {
-		return false
+	if aOk && bOk {
+		if grantAWithTable.GetTable() != grantBWithTable.GetTable() {
+			return false
+		}
 	}
 
 	return true
